@@ -1,7 +1,6 @@
 'use strict'
-import http from 'http';
 import request from 'request';
-import fs,{ createWriteStream } from 'fs';
+import { createWriteStream } from 'fs';
 import progress from 'request-progress';
 import requestOptions from 'request-options';
 import inquirer from 'inquirer';
@@ -9,7 +8,7 @@ import inquirer from 'inquirer';
 let outputLocation =  './',   //final output location
     outputFileName,
     serverFileURL,
-    iterationCount,
+    iterationCount = 1,
     startRange  = 0,
     endRange  = 1048576,  //1 MiB chunk in bytes(decimal)
     chunksCount = 4,  // file to be divided in these many chunks
@@ -25,11 +24,12 @@ let outputLocation =  './',   //final output location
  * @name downloadFileInChunks
  * @type {Method}
  * @description gets the file in chunks from the server
- * @param Range which is a rest operator which takes multiple values from parent method and converts it into array
+ * @param startRange and endRange = comprises of start and end range values
  */
 
-let downloadFileInChunks = (...Range) => {
-  options.headers = {Range: `bytes=${Range[0]}-${Range[1]}`};
+let downloadFileInChunks = (startRange, endRange) => {
+  console.log(`StartRange is : ${startRange} and EndRange is :  ${endRange}`);
+  options.headers = {Range: `bytes=${startRange}-${endRange}`};
   progress(request(requestOptions(options)))
    .on('progress', state => {
      console.log(`time elapsed ${state.time.elapsed}`)
@@ -39,13 +39,14 @@ let downloadFileInChunks = (...Range) => {
     })
     .on('end', () => {
       iterationCount++;
-      Range.startRange = Range.endRange + 1 ;
-      Range.endRange += Range.endRange;
-
+      startRange = endRange + 1 ;
+      endRange  += endRange;
       console.log(`Chunk Index : ${iterationCount} : downloaded!!`);
-      if(iterationCount === chunksCount ) {
+      if(iterationCount >= chunksCount ) {
         console.log('File downloaded successfully. ');
         process.exit();
+      } else {
+        downloadFileInChunks(startRange, endRange);  //repeat the method
       }
     })
     .pipe(createWriteStream(`${outputLocation}/${outputFileName}`,{flags: 'a'}) );
@@ -77,18 +78,22 @@ let questions = [{
  * @param Null
  */
 
-let updateRangeBasedOnFileSize = () => {
+let updateRangeBasedOnFileSize =  () => {
   let totalFileSize;
-  request
-  .get(options.url)
-  .on('response', response => {
-    totalFileSize = response.headers['content-length'];
-    if(totalFileSize && totalFileSize < maxSizeAllowed) {
-      endRange = totalFileSize/chunksCount;   // endRange will now be reduced as per the file size if it is lesser than maxallowedsize
-    }
-  })
-  .on('error', err => {
-    console.log(`error found : ${err}`);
+  return new Promise((resolve, reject)=> {
+    request
+   .get(options.url)
+   .on('response', response => {
+     totalFileSize = response.headers['content-length'];
+     if(totalFileSize && totalFileSize < maxSizeAllowed) {
+       endRange = totalFileSize/chunksCount;   // endRange will now be reduced as per the file size if it is lesser than maxallowedsize
+       console.log(`Since total file size is lesser than 4Mib, the endRange is updated to ${endRange}`);
+     }
+     resolve(endRange);
+   })
+   .on('error', err => {
+     reject(err);
+   })
   })
 }
 
@@ -99,18 +104,20 @@ let updateRangeBasedOnFileSize = () => {
  * @param None
  */
 
-let promptInquirer  = () => {
+let promptInquirer  =   () => {
   inquirer.prompt(questions).then(answers => {
       serverFileURL = answers['sourceURL'] ? answers['sourceURL'] : '';
       outputFileName = answers['outputFileName'] ? answers['outputFileName']: 'default';
       if(serverFileURL) {
         //Loop to iterate 4 times downloading file in 4 chunks and merging finally
-        iterationCount = 0;
         options.url = serverFileURL;
-        updateRangeBasedOnFileSize();   //check file size and update range
-        for(let count = 0; count < chunksCount; count++) {
-          downloadFileInChunks(startRange, endRange);
-        }
+        updateRangeBasedOnFileSize().then((endRange)=>{
+            //request resolved, now proceeding to download
+            downloadFileInChunks(startRange, endRange);
+        },(err)=>{
+            //request failed
+            console.log(`server responded with an error ${err}`)
+        });
 
       } else {
         console.log('server URL is mandatory. Hence repeating the process. ');
