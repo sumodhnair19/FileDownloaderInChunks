@@ -24,7 +24,7 @@ For e.g downloads only 4mib of any provided URL and in chunks.
   
 ## Start Application:-
   
-  - npm serve
+  - npm start
     
     
 ## What it does :-
