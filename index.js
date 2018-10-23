@@ -6,7 +6,7 @@ import progress from 'request-progress';
 import requestOptions from 'request-options';
 import inquirer from 'inquirer';
 
-let outputLocation =  './file',   //final output location
+let outputLocation =  './',   //final output location
     outputFileName,
     serverFileURL,
     iterationCount,
