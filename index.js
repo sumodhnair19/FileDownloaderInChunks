@@ -8,9 +8,10 @@ import inquirer from 'inquirer';
 let outputLocation =  './',   //final output location
     outputFileName,
     serverFileURL,
-    iterationCount = 1,
+    iterationCount = 0,
     startRange  = 0,
-    endRange  = 1048576,  //1 MiB chunk in bytes(decimal)
+    endRange  = 1048576,  //1 MiB chunk in bytes(decimal),
+    fixedRange = 1048576,
     chunksCount = 4,  // file to be divided in these many chunks
     maxSizeAllowed  = 1048576 * chunksCount, //4MiB in bytes(decimal)
     options = {
@@ -40,7 +41,7 @@ let downloadFileInChunks = (startRange, endRange) => {
     .on('end', () => {
       iterationCount++;
       startRange = endRange + 1 ;
-      endRange  += endRange;
+      endRange  += fixedRange;
       console.log(`Chunk Index : ${iterationCount} : downloaded!!`);
       if(iterationCount >= chunksCount ) {
         console.log('File downloaded successfully. ');
@@ -86,10 +87,10 @@ let updateRangeBasedOnFileSize =  () => {
    .on('response', response => {
      totalFileSize = response.headers['content-length'];
      if(totalFileSize && totalFileSize < maxSizeAllowed) {
-       endRange = totalFileSize/chunksCount;   // endRange will now be reduced as per the file size if it is lesser than maxallowedsize
-       console.log(`Since total file size is lesser than 4Mib, the endRange is updated to ${endRange}`);
+       endRange = fixedRange = totalFileSize/chunksCount;   // fixedRange will now be reduced as per the file size if it is lesser than maxallowedsize
+       console.log(`Since total file size is lesser than 4Mib, the endRange is updated to ${fixedRange}`);
      }
-     resolve(endRange);
+     resolve(fixedRange);
    })
    .on('error', err => {
      reject(err);
